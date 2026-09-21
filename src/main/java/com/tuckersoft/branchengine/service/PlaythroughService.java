@@ -12,7 +12,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -21,11 +23,13 @@ public class PlaythroughService {
     private final PlaythroughRepository playthroughRepository;
     private final StoryNodeRepository nodeRepository;
     private final UserRepository userRepository;
+    private final DecisionRepository decisionRepository;
 
-    public PlaythroughService(PlaythroughRepository playthroughRepository, StoryNodeRepository nodeRepository, UserRepository userRepository) {
+    public PlaythroughService(PlaythroughRepository playthroughRepository, StoryNodeRepository nodeRepository, UserRepository userRepository, DecisionRepository decisionRepository) {
         this.playthroughRepository = playthroughRepository;
         this.nodeRepository = nodeRepository;
         this.userRepository = userRepository;
+        this.decisionRepository = decisionRepository;
     }
 
     @Transactional
@@ -82,7 +86,19 @@ public class PlaythroughService {
         Playthrough p = playthroughRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("No encontrado"));
         checkAccess(p, email, role);
         
-        // El array de pasos estara vacio por ahora hasta Estrella 4
+        List<Decision> decisions = decisionRepository.findAllByPlaythroughIdAndResolvedNodeCodeIsNotNullOrderByCreatedAtAsc(id);
+        List<Object> steps = new ArrayList<>();
+        
+        int order = 1;
+        for (Decision d : decisions) {
+            Map<String, Object> step = new HashMap<>();
+            step.put("order", order++);
+            step.put("fromNodeCode", d.getNode().getNodeCode());
+            step.put("decision", d.getRawInput());
+            step.put("toNodeCode", d.getResolvedNodeCode());
+            steps.add(step);
+        }
+        
         return new PathResponse(
                 p.getId(),
                 p.getPlayerTag(),
@@ -90,7 +106,7 @@ public class PlaythroughService {
                 p.getEndingCode(),
                 p.getStartNodeCode(),
                 p.getCurrentNode().getNodeCode(),
-                new ArrayList<>()
+                steps
         );
     }
 
